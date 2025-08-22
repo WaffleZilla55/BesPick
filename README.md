@@ -1,0 +1,2 @@
+# BesPick
+An application meant to consolidate functionality for all events that the BESPIN Morale Team runs.
