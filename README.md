@@ -36,16 +36,6 @@ The app integrates with **Firebase** for authentication and **PayPal** for payme
 Ensure you are in the "bespick" folder by using `cd bespick`.  
 This file is **gitignored** and required to run the application locally.  
 
-### .env.local
-
-Create a `.env.local` file in the **root of the repository**
-
-```env
-NEXT_PUBLIC_KEYCLOAK_URL=http://localhost:8080
-NEXT_PUBLIC_KEYCLOAK_REALM=bespick
-NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=bespick-client
-```
-
 ## Running the Application
 
 1. Ensure you are in the "bespick" folder by using `cd bespick`

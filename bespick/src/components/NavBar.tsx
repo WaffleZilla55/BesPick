@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { FaArchive, FaPlus } from 'react-icons/fa';
 import Link from 'next/link';
 import { ThemeSelect } from './ThemeSelect';
+import Image from 'next/image'
 
 export default function NavBar() {
   const [isDropdownOpen, setDropdownOpen] = useState(false);
@@ -32,9 +33,11 @@ export default function NavBar() {
     <nav className='w-full h-16 bg-app shadow flex items-center justify-between'>
       {/* Left: Logo + Company Name */}
       <div className='flex items-center'>
-        <img
+        <Image
           src='/logo.png'
-          alt='Company Logo'
+          width={500}
+          height={250}
+          alt='BesPick Logo'
           className='w-16 h-16 object-cover'
         />
         <span className='text-xl font-bold text-brand hover:text-brand focus:text-brand-secondary  hidden md:inline'>
