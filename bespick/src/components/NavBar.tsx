@@ -6,10 +6,12 @@ import { FaArchive, FaPlus } from 'react-icons/fa';
 import Link from 'next/link';
 import { ThemeSelect } from './ThemeSelect';
 import Image from 'next/image'
+import { usePathname } from 'next/navigation'
 
 export default function NavBar() {
   const [isDropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const pathName = usePathname();
 
   const toggleDropdown = () => {
     setDropdownOpen((prev) => !prev);
@@ -30,7 +32,7 @@ export default function NavBar() {
   }, []);
 
   return (
-    <nav className='w-full h-16 bg-app shadow flex items-center justify-between'>
+    <nav className='w-full h-16 bg-app shadow flex items-center cursor-pointer justify-between'>
       {/* Left: Logo + Company Name */}
       <div className='flex items-center'>
         <Image
@@ -40,18 +42,23 @@ export default function NavBar() {
           alt='BesPick Logo'
           className='w-16 h-16 object-cover'
         />
-        <span className='text-xl font-bold text-brand hover:text-brand focus:text-brand-secondary  hidden md:inline'>
+        <span className='text-xl font-bold text-brand hover:text-brand focus:text-brand-secondary hidden md:inline'>
           BesPick
         </span>
+        {/* Color Theme Selector */}
+        <div className="p-4">
+          <ThemeSelect />
+        </div>
       </div>
 
       {/* Right: Icons + Profile */}
+      {pathName !== '/login' && (
       <div className='flex items-center space-x-4 relative mr-4'>
         {/* Create Button with Dropdown */}
         <div className='relative' ref={dropdownRef}>
           <button
             onClick={toggleDropdown}
-            className='flex items-center justify-center text-brand hover:text-brand focus:text-brand-secondary '
+            className='flex items-center justify-center text-brand cursor-pointer hover:text-brand focus:text-brand-secondary '
           >
             <FaPlus size={20} />
           </button>
@@ -72,11 +79,9 @@ export default function NavBar() {
             </ul>
           </div>
         </div>
-        <button className='flex items-center justify-center text-brand hover:text-brand focus:text-brand-secondary '>
+        <button className='flex items-center justify-center text-brand cursor-pointer hover:text-brand focus:text-brand-secondary '>
           <FaArchive size={20} />
         </button>
-        {/* Color Theme Selector */}
-        <ThemeSelect />
         {/* Profile Image with Link */}
         <Link href='/profile'>
           <img
@@ -86,6 +91,7 @@ export default function NavBar() {
           />
         </Link>
       </div>
+      )}
     </nav>
   );
 }
