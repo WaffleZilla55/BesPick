@@ -161,7 +161,8 @@ export function AnnouncementForm({
   }, [ensureMinimumPollOptions]);
 
   const isEditing = Boolean(existingActivity);
-  const showSchedulingControls = !isEditing;
+  const showSchedulingControls = true;
+  const shouldEnforceFuturePublishGuards = !isEditing;
   const isScheduled = Boolean(date && time) && showSchedulingControls;
   const activeType =
     (existingActivity?.eventType as ActivityType | undefined) ?? activityType;
@@ -285,7 +286,11 @@ export function AnnouncementForm({
         return;
       }
 
-      if (date === todayLocalISO && time) {
+      if (
+        shouldEnforceFuturePublishGuards &&
+        date === todayLocalISO &&
+        time
+      ) {
         const publishAtCandidate = combineDateTimeToEpochMs(date, time);
         if (publishAtCandidate < Date.now()) {
           setError('Publish time cannot be in the past.');
@@ -482,7 +487,7 @@ export function AnnouncementForm({
       return timeSlots.filter((slot) => slotToMinutes(slot) >= currentMinutes);
     }
     return timeSlots;
-  }, [date, todayLocalISO, timeSlots, slotToMinutes, now, isEditing]);
+  }, [date, todayLocalISO, timeSlots, slotToMinutes, now, showSchedulingControls]);
 
   React.useEffect(() => {
     if (isEditing || !time || date !== todayLocalISO) return;
@@ -511,10 +516,12 @@ export function AnnouncementForm({
     });
   }, [autoDeleteEnabled, deleteDate, deleteTime]);
 
-  const minAutoDeleteDate = React.useMemo(() => {
-    if (isEditing) return todayLocalISO;
-    return date || todayLocalISO;
-  }, [date, todayLocalISO, isEditing]);
+  const earliestAutomationDate = React.useMemo(() => {
+    if (!date) return todayLocalISO;
+    return date < todayLocalISO ? todayLocalISO : date;
+  }, [date, todayLocalISO]);
+
+  const minAutoDeleteDate = earliestAutomationDate;
 
   const autoArchiveSummary = React.useMemo(() => {
     if (!autoArchiveEnabled || !archiveDate || !archiveTime) return null;
@@ -527,10 +534,7 @@ export function AnnouncementForm({
     });
   }, [autoArchiveEnabled, archiveDate, archiveTime]);
 
-  const minAutoArchiveDate = React.useMemo(() => {
-    if (isEditing) return todayLocalISO;
-    return date || todayLocalISO;
-  }, [date, todayLocalISO, isEditing]);
+  const minAutoArchiveDate = earliestAutomationDate;
 
   const minPollCloseDate = React.useMemo(() => {
     return date || todayLocalISO;
@@ -751,6 +755,42 @@ export function AnnouncementForm({
     date === todayLocalISO &&
     availableTimeSlotsCore.length === 0;
 
+  const publishStatusMessage = React.useMemo(() => {
+    if (!showSchedulingControls) {
+      return isEditing
+        ? 'Changes will publish immediately.'
+        : 'No time selected — will publish immediately.';
+    }
+
+    if (date === todayLocalISO && !time) {
+      return isEditing
+        ? 'No publish time selected — changes publish immediately.'
+        : 'No time selected — will publish immediately.';
+    }
+
+    if (scheduledSummary) {
+      return isEditing
+        ? `Changes will publish on ${scheduledSummary}.`
+        : `Scheduled for ${scheduledSummary}`;
+    }
+
+    if (scheduledDate) {
+      return `Scheduled for ${scheduledDate} - select a publish time.`;
+    }
+
+    return isEditing
+      ? 'Set a publish date or time to control when updates go live.'
+      : 'Set a publish date or time to schedule this activity.';
+  }, [
+    showSchedulingControls,
+    date,
+    time,
+    todayLocalISO,
+    isEditing,
+    scheduledSummary,
+    scheduledDate,
+  ]);
+
   return (
     <form
       className='space-y-6'
@@ -941,7 +981,7 @@ export function AnnouncementForm({
                   const enabled = event.target.checked;
                   setPollHasClose(enabled);
                   if (enabled) {
-                    const defaultDate = date || todayLocalISO;
+                    const defaultDate = earliestAutomationDate;
                     setPollCloseDate((prev) => prev || defaultDate);
                     setPollCloseTime((prev) => prev || time || '');
                   } else {
@@ -1009,9 +1049,7 @@ export function AnnouncementForm({
                 setAutoArchiveEnabled(false);
                 setArchiveDate('');
                 setArchiveTime('');
-                const defaultDeleteDate = showSchedulingControls
-                  ? date || todayLocalISO
-                  : todayLocalISO;
+                const defaultDeleteDate = earliestAutomationDate;
                 setDeleteDate((prev) => prev || defaultDeleteDate);
                 setDeleteTime((prev) => prev || time || '');
               } else {
@@ -1090,9 +1128,7 @@ export function AnnouncementForm({
                 setAutoDeleteEnabled(false);
                 setDeleteDate('');
                 setDeleteTime('');
-                const defaultArchiveDate = showSchedulingControls
-                  ? date || todayLocalISO
-                  : todayLocalISO;
+                const defaultArchiveDate = earliestAutomationDate;
                 setArchiveDate((prev) => prev || defaultArchiveDate);
                 setArchiveTime((prev) => prev || time || '');
               } else {
@@ -1161,13 +1197,7 @@ export function AnnouncementForm({
 
       <div className='flex items-center justify-between gap-3'>
         <p className='text-xs text-muted-foreground'>
-          {isEditing
-            ? 'Changes will publish immediately.'
-            : date === todayLocalISO && !time
-                ? 'No time selected — will publish immediately.'
-                : isScheduled && scheduledSummary
-                  ? `Scheduled for ${scheduledSummary}`
-                  : `Scheduled for ${scheduledDate} - select a publish time.`}
+          {publishStatusMessage}
         </p>
         <div className='flex gap-2'>
           <button

@@ -3,14 +3,15 @@ import { checkRole } from '@/server/auth/check-role';
 import { ActivityFormTabs } from '@/components/admin/activity-form-tabs';
 
 export default async function AdminCreatePage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams?: { edit?: string };
+  searchParams?: Promise<{ edit?: string }>;
 }) {
   if (!(await checkRole('admin'))) {
     redirect('/');
   }
 
+  const searchParams = await searchParamsPromise;
   const isEditing = Boolean(searchParams?.edit);
 
   return (

@@ -8,7 +8,7 @@ const isAdminRoute = createRouteMatcher(['/admin(.*)']);
 
 export default clerkMiddleware(async (auth, req: NextRequest) => {
   const url = new URL(req.url);
-  const { isAuthenticated, sessionClaims } = await auth();
+  const { isAuthenticated } = await auth();
 
   // Public routes: allow through
   if (isPublicRoute(req)) return;
