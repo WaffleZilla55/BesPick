@@ -1,34 +1,108 @@
-import type { Metadata } from 'next';
+import Link from 'next/link';
+import type { ReactNode } from 'react';
+import Script from 'next/script';
+import { ClerkProvider } from '@clerk/nextjs';
+import { Geist, Geist_Mono } from 'next/font/google';
+import { HeaderActions } from '@/components/header/header-actions';
 import './globals.css';
-import NavBar from '@/components/NavBar';
-import { ThemeProvider } from 'next-themes';
-import SessionProviderWrapper from '@/components/SessionProviderWrapper';
+import { shadcn } from '@clerk/themes';
+import ConvexProviderWrapper from './providers/ConvexProvider';
 
-export const metadata: Metadata = {
-  title: 'BesPick',
-  description:
-    'An application created for the BESPIN morale team, dedicated to hosting BESPIN giveaways and voting events',
+export const metadata = {
+  title: 'BESPICK',
+  description: 'BESPIN Morale Team',
 };
+
+const geistSans = Geist({
+  variable: '--font-geist-sans',
+  subsets: ['latin'],
+});
+
+const geistMono = Geist_Mono({
+  variable: '--font-geist-mono',
+  subsets: ['latin'],
+});
 
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode;
-}) {
+}: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang='en' suppressHydrationWarning>
-      <body className='bg-app'>
-        <ThemeProvider
-          attribute='class' // adds "light" or "dark" to <html>
-          defaultTheme='light' // or "system" if you want OS-based default
-          enableSystem={false} // disable if you want full manual control
+    <ClerkProvider
+      appearance={{
+        baseTheme: shadcn,
+        layout: {
+          unsafe_disableDevelopmentModeWarnings: true,
+        },
+        variables: {
+          fontFamily:
+            'var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        },
+        userButton: {
+          elements: {
+            avatarBox: 'h-10 w-10',
+            userButtonPopoverCard:
+              'bg-card text-foreground border border-border shadow-2xl rounded-2xl',
+            userButtonPopoverFooter:
+              'bg-accent text-foreground border-t border-border rounded-b-2xl',
+          },
+        },
+        userProfile: {
+          elements: {
+            card:
+              'bg-card text-foreground border border-border shadow-2xl rounded-t',
+            modalContent: 'bg-background text-foreground rounded-2xl',
+            page: 'bg-background text-foreground',
+            navbar: 'bg-card border-b border-border rounded-t',
+          },
+        },
+      }}
+      signInUrl='/sign-in'
+      signUpUrl='/sign-up'
+    >
+      <html lang='en' suppressHydrationWarning>
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} bg-background text-foreground font-sans antialiased`}
         >
-          <SessionProviderWrapper>
-            <NavBar />
-            {children}
-          </SessionProviderWrapper>
-        </ThemeProvider>
-      </body>
+          <Script id='theme-sync' strategy='beforeInteractive'>{`(() => {
+  const root = document.documentElement;
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+  const apply = () => {
+    if (media.matches) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  };
+  apply();
+  if (typeof media.addEventListener === 'function') {
+    media.addEventListener('change', apply);
+  } else if (typeof media.addListener === 'function') {
+    media.addListener(apply);
+  }
+})();`}</Script>
+          <div className='flex min-h-screen flex-col'>
+            {/* Header */}
+            <header className='fixed inset-x-0 top-0 z-50 border-b border-border bg-card/80 backdrop-blur supports-backdrop-filter:bg-card/60'>
+              <div className='mx-auto flex h-16 w-full max-w-8xl items-center justify-between px-5'>
+                <Link
+                  href='/'
+                  className='text-lg font-semibold tracking-tight transition hover:text-primary hover:scale-110 sm:text-xl'
+                  aria-label='Go to home'
+                >
+                  BESPICK
+                </Link>
+                <div className='relative flex items-center'>
+                  <HeaderActions />
+                </div>
+              </div>
+            </header>
+            <ConvexProviderWrapper>
+              {/* Main content */}
+              <main className='flex-1 pt-16'>{children}</main>
+            </ConvexProviderWrapper>
+          </div>
+        </body>
       </html>
+    </ClerkProvider>
   );
 }
