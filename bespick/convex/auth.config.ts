@@ -3,7 +3,7 @@ import type { AuthConfig } from 'convex/server';
 const authConfig: AuthConfig = {
   providers: [
     {
-      domain: 'https://warm-kiwi-77.clerk.accounts.dev',
+      domain: 'famous-stallion-48.clerk.accounts.dev',
       applicationID: 'convex',
     },
   ],
