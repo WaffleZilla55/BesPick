@@ -1,26 +1,121 @@
-@import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@import 'tailwindcss';
+@import '@clerk/themes/shadcn.css';
+@layer theme, base, clerk, components, utilities;
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-danger: hsl(var(--danger));
 }
 
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 0 0% 100%;
+    --foreground: 240 10% 19%;
+    --card: 240 11% 98%;
+    --card-foreground: 240 10% 19%;
+    --popover: 240 11% 98%;
+    --popover-foreground: 240 10% 19%;
+    --primary: 252 93% 64%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 7% 97%;
+    --secondary-foreground: 240 10% 19%;
+    --muted: 240 7% 97%;
+    --muted-foreground: 240 8% 45%;
+    --accent: 252 93% 64%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 7% 97%;
+    --input: 240 7% 97%;
+    --ring: 252 93% 64%;
+    --radius: 0.5rem;
+    --danger: 360 100% 46%;
+  }
+
+  .dark {
+    --background: 240 7% 11%;
+    --foreground: 240 6% 97%;
+    --card: 240 6% 7%;
+    --card-foreground: 240 6% 97%;
+    --popover: 240 6% 7%;
+    --popover-foreground: 240 6% 97%;
+    --primary: 252 93% 64%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 7% 15%;
+    --secondary-foreground: 240 6% 97%;
+    --muted: 240 7% 15%;
+    --muted-foreground: 240 8% 70%;
+    --accent: 252 93% 64%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 31%;
+    --destructive-foreground: 0 86% 97%;
+    --border: 240 7% 15%;
+    --input: 240 7% 15%;
+    --ring: 252 93% 64%;
+    --danger: 360 100% 46%;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  :root {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: 240 7% 11%;
+      --foreground: 240 6% 97%;
+      --card: 240 6% 7%;
+      --card-foreground: 240 6% 97%;
+      --popover: 240 6% 7%;
+      --popover-foreground: 240 6% 97%;
+      --primary: 252 93% 64%;
+      --primary-foreground: 0 0% 100%;
+      --secondary: 240 7% 15%;
+      --secondary-foreground: 240 6% 97%;
+      --muted: 240 7% 15%;
+      --muted-foreground: 240 8% 70%;
+      --accent: 252 93% 64%;
+      --accent-foreground: 0 0% 100%;
+      --destructive: 0 62% 31%;
+      --destructive-foreground: 0 86% 97%;
+      --border: 240 7% 15%;
+      --input: 240 7% 15%;
+      --ring: 252 93% 64%;
+    }
+  }
 }
