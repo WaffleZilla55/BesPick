@@ -9,6 +9,7 @@
  */
 
 import type * as announcements from "../announcements.js";
+import type * as storage from "../storage.js";
 
 import type {
   ApiFromModules,
@@ -18,6 +19,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   announcements: typeof announcements;
+  storage: typeof storage;
 }>;
 
 /**

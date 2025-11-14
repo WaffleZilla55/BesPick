@@ -28,6 +28,7 @@ export default defineSchema({
     pollAllowAdditionalOptions: v.optional(v.boolean()),
     pollMaxSelections: v.optional(v.number()),
     pollClosesAt: v.optional(v.number()),
+    imageIds: v.optional(v.array(v.id('_storage'))),
   })
     .index('by_publishAt', ['status', 'publishAt']) // for schedulers/feeds
     .index('by_type', ['eventType']),

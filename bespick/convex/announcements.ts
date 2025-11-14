@@ -21,6 +21,7 @@ export const create = mutation({
         v.literal('voting')
       )
     ),
+    imageIds: v.optional(v.array(v.id('_storage'))),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -109,6 +110,15 @@ export const create = mutation({
       }
     }
 
+    const providedImageIds =
+      Array.isArray(args.imageIds) && args.imageIds.length > 0
+        ? args.imageIds
+        : [];
+    if (providedImageIds.length > 5) {
+      throw new Error('You can upload up to five images.');
+    }
+    const normalizedImageIds = Array.from(new Set(providedImageIds));
+
     const id = await ctx.db.insert('announcements', {
       title: cleanedTitle,
       description: cleanedDescription,
@@ -128,6 +138,7 @@ export const create = mutation({
         eventType === 'poll' ? pollMaxSelections : undefined,
       pollClosesAt:
         eventType === 'poll' ? pollClosesAt ?? undefined : undefined,
+      imageIds: normalizedImageIds.length ? normalizedImageIds : undefined,
     });
 
     return { id, status };
@@ -216,6 +227,7 @@ export const update = mutation({
         v.literal('voting'),
       ),
     ),
+    imageIds: v.optional(v.array(v.id('_storage'))),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -273,11 +285,11 @@ export const update = mutation({
 
     let pollQuestion: string | null = null;
     let pollOptions: string[] | null = null;
-    let pollAnonymous =
+    const pollAnonymous =
       typeof args.pollAnonymous === 'boolean'
         ? args.pollAnonymous
         : existing.pollAnonymous ?? false;
-    let pollAllowAdditionalOptions =
+    const pollAllowAdditionalOptions =
       typeof args.pollAllowAdditionalOptions === 'boolean'
         ? args.pollAllowAdditionalOptions
         : existing.pollAllowAdditionalOptions ?? false;
@@ -285,7 +297,7 @@ export const update = mutation({
       typeof args.pollMaxSelections === 'number'
         ? Math.max(1, Math.floor(args.pollMaxSelections))
         : existing.pollMaxSelections ?? 1;
-    let pollClosesAt =
+    const pollClosesAt =
       typeof args.pollClosesAt === 'number'
         ? args.pollClosesAt
         : args.pollClosesAt === null
@@ -320,6 +332,15 @@ export const update = mutation({
         throw new Error('Poll close time must be after the publish time.');
       }
     }
+
+    const providedImageIds =
+      Array.isArray(args.imageIds) && args.imageIds.length > 0
+        ? args.imageIds
+        : existing.imageIds ?? [];
+    if (providedImageIds.length > 5) {
+      throw new Error('You can upload up to five images.');
+    }
+    const normalizedImageIds = Array.from(new Set(providedImageIds));
 
     const updatedBy =
       identity?.name ??
@@ -361,6 +382,8 @@ export const update = mutation({
         eventType === 'poll'
           ? pollClosesAt ?? undefined
           : undefined,
+      imageIds:
+        normalizedImageIds.length > 0 ? normalizedImageIds : undefined,
     });
 
     return { id: args.id, status };
@@ -472,6 +495,7 @@ export const getPoll = query({
       closesAt,
       isClosed,
       isArchived: announcement.status === 'archived',
+      imageIds: announcement.imageIds ?? [],
     };
   },
 });
@@ -553,7 +577,7 @@ export const votePoll = mutation({
     }
 
     const now = Date.now();
-    let options = [...(announcement.pollOptions ?? [])];
+    const options = [...(announcement.pollOptions ?? [])];
 
     if (
       typeof announcement.pollClosesAt === 'number' &&

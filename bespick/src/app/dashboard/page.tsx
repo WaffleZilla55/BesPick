@@ -5,7 +5,13 @@ import { useMutation, useQuery } from 'convex/react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { MoreVertical } from 'lucide-react';
+import { AnnouncementModal } from '@/components/announcements/announcement-modal';
 import { PollModal } from '@/components/poll/poll-modal';
+import {
+  formatCreator,
+  formatDate,
+  formatEventType,
+} from '@/lib/announcements';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 
@@ -65,6 +71,8 @@ export default function DashboardPage() {
     React.useState<boolean | null>(null);
   const [activePollId, setActivePollId] =
     React.useState<AnnouncementId | null>(null);
+  const [viewingAnnouncement, setViewingAnnouncement] =
+    React.useState<Announcement | null>(null);
   const isLoading = activities === undefined;
   const hasActivities = (activities?.length ?? 0) > 0;
   const isAdmin =
@@ -134,6 +142,13 @@ export default function DashboardPage() {
     setActivePollId(id);
   }, []);
 
+  const handleViewAnnouncement = React.useCallback(
+    (announcement: Announcement) => {
+      setViewingAnnouncement(announcement);
+    },
+    [],
+  );
+
   return (
     <section className='mx-auto w-full max-w-5xl px-4 py-16'>
       <header className='mb-10 sm:mb-12'>
@@ -183,6 +198,7 @@ export default function DashboardPage() {
               deletingId={deletingId}
               archivingId={archivingId}
               onOpenPoll={handleOpenPoll}
+              onViewAnnouncement={handleViewAnnouncement}
             />
           ))}
       </div>
@@ -193,6 +209,13 @@ export default function DashboardPage() {
           onClose={() => setActivePollId(null)}
           isAdmin={isAdmin}
           canVote={Boolean(user)}
+        />
+      )}
+
+      {viewingAnnouncement && (
+        <AnnouncementModal
+          announcement={viewingAnnouncement}
+          onClose={() => setViewingAnnouncement(null)}
         />
       )}
     </section>
@@ -208,6 +231,7 @@ type ActivityCardProps = {
   onArchive: (id: AnnouncementId) => Promise<void>;
   archivingId: AnnouncementId | null;
   onOpenPoll?: (id: AnnouncementId) => void;
+  onViewAnnouncement: (announcement: Announcement) => void;
 };
 
 function ActivityCard({
@@ -219,6 +243,7 @@ function ActivityCard({
   onArchive,
   archivingId,
   onOpenPoll,
+  onViewAnnouncement,
 }: ActivityCardProps) {
   const publishedDate = React.useMemo(
     () => formatDate(activity.publishAt),
@@ -276,7 +301,10 @@ function ActivityCard({
       </header>
 
       <h2 className='mt-4 text-2xl font-semibold text-foreground'>{activity.title}</h2>
-      <DescriptionPreview text={activity.description} />
+      <DescriptionPreview
+        text={activity.description}
+        imageCount={activity.imageIds?.length ?? 0}
+      />
 
       <footer className='mt-5 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground'>
         <div className='flex flex-col gap-1'>
@@ -309,20 +337,40 @@ function ActivityCard({
               View Poll
             </button>
           )}
+          {!isPollCard && (
+            <button
+              type='button'
+              onClick={() => onViewAnnouncement(activity)}
+              className='rounded-full border border-primary px-3 py-1 text-xs font-medium text-primary transition hover:bg-primary/10'
+            >
+              View announcement
+            </button>
+          )}
         </div>
       </footer>
     </article>
   );
 }
 
-function DescriptionPreview({ text }: { text: string }) {
+function DescriptionPreview({
+  text,
+  imageCount = 0,
+}: {
+  text: string;
+  imageCount?: number;
+}) {
   const formattedText = React.useMemo(
     () => text.replace(/\r\n/g, '\n'),
     [text],
   );
+  const attachmentNotice = React.useMemo(() => {
+    if (!imageCount) return null;
+    const label = imageCount === 1 ? 'image' : 'images';
+    return `(${imageCount} ${label} attached)`;
+  }, [imageCount]);
 
   return (
-    <div className='mt-4'>
+    <div className='mt-4 space-y-1'>
       <p
         className='text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap wrap-break-word'
         style={{
@@ -334,6 +382,9 @@ function DescriptionPreview({ text }: { text: string }) {
       >
         {formattedText}
       </p>
+      {attachmentNotice && (
+        <p className='text-xs italic text-muted-foreground'>{attachmentNotice}</p>
+      )}
     </div>
   );
 }
@@ -354,31 +405,6 @@ function DashboardSkeleton() {
       ))}
     </div>
   );
-}
-
-function formatDate(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(timestamp));
-}
-
-function formatEventType(type: Announcement['eventType']) {
-  return type
-    .split(/[-_]/g)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function formatCreator(createdBy?: string | null) {
-  if (!createdBy || createdBy === 'anonymous') return 'Anonymous';
-  if (createdBy.includes(':')) {
-    return createdBy.split(':')[0];
-  }
-  if (createdBy.includes('|')) {
-    return createdBy.split('|')[0];
-  }
-  return createdBy;
 }
 
 type ActivityMenuProps = {

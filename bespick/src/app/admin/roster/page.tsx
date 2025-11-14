@@ -40,7 +40,7 @@ export default async function AdminRosterPage({
         </h1>
         <p className='mt-2 text-sm text-muted-foreground'>
           Manage user roles and permissions. Only members with the admin role
-          can access this view.
+          can access this view. Moderator roles have no function currently.
         </p>
       </header>
 
