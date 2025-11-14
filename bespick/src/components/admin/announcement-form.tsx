@@ -10,6 +10,13 @@ import { PollOptionsSection } from './announcement-form/sections/PollOptionsSect
 import { PollSettingsSection } from './announcement-form/sections/PollSettingsSection';
 import { AutomationSection } from './announcement-form/sections/AutomationSection';
 import { ImageUploadSection } from './announcement-form/sections/ImageUploadSection';
+import { VotingSettingsSection } from './announcement-form/sections/VotingSettingsSection';
+import {
+  GROUP_OPTIONS,
+  type Group,
+  type Portfolio,
+  getPortfoliosForGroup,
+} from '@/lib/org';
 
 export type ActivityType = 'announcements' | 'poll' | 'voting';
 type AnnouncementDoc = Doc<'announcements'>;
@@ -20,6 +27,63 @@ const ACTIVITY_LABELS: Record<ActivityType, string> = {
   voting: 'Voting',
 };
 const MAX_IMAGES = 5;
+const LEADERBOARD_OPTIONS: Array<{
+  value: VotingLeaderboardMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: 'all',
+    label: 'Single leaderboard',
+    description: 'Rank everyone together regardless of group.',
+  },
+  {
+    value: 'group',
+    label: 'Per group',
+    description: 'Each group gets its own leaderboard.',
+  },
+  {
+    value: 'group_portfolio',
+    label: 'Per group & portfolio',
+    description:
+      'Create leaderboards for every group and their individual portfolios.',
+  },
+];
+
+type VotingParticipant = {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  group?: Group | null;
+  portfolio?: Portfolio | null;
+  votes: number;
+};
+
+type VotingRosterEntry = VotingParticipant & {
+  group: Group | null;
+  portfolio: Portfolio | null;
+};
+
+type VotingLeaderboardMode = 'all' | 'group' | 'group_portfolio';
+
+const GROUP_KEYS = GROUP_OPTIONS.map((option) => option.value) as Group[];
+const PORTFOLIO_KEYS = GROUP_OPTIONS.flatMap(
+  (option) => option.portfolios,
+) as Portfolio[];
+
+function initGroupSelections(defaultValue: boolean): Record<Group, boolean> {
+  return GROUP_KEYS.reduce((acc, group) => {
+    acc[group] = defaultValue;
+    return acc;
+  }, {} as Record<Group, boolean>);
+}
+
+function initPortfolioSelections(defaultValue: boolean): Record<Portfolio, boolean> {
+  return PORTFOLIO_KEYS.reduce((acc, portfolio) => {
+    acc[portfolio] = defaultValue;
+    return acc;
+  }, {} as Record<Portfolio, boolean>);
+}
 
 export function AnnouncementForm({
   activityType = 'announcements',
@@ -57,6 +121,22 @@ export function AnnouncementForm({
   const [pollCloseTime, setPollCloseTime] = React.useState('');
   const [imageIds, setImageIds] = React.useState<Id<'_storage'>[]>([]);
   const [uploadingImages, setUploadingImages] = React.useState(false);
+const [votingRoster, setVotingRoster] = React.useState<VotingRosterEntry[]>([]);
+const [votingGroupSelections, setVotingGroupSelections] = React.useState<
+  Record<Group, boolean>
+>(() => initGroupSelections(true));
+const [votingPortfolioSelections, setVotingPortfolioSelections] = React.useState<
+  Record<Portfolio, boolean>
+>(() => initPortfolioSelections(true));
+const [votingAllowUngrouped, setVotingAllowUngrouped] = React.useState(true);
+const [votingAddVotePrice, setVotingAddVotePrice] = React.useState('');
+const [votingRemoveVotePrice, setVotingRemoveVotePrice] = React.useState('');
+const [votingLeaderboardMode, setVotingLeaderboardMode] = React.useState<VotingLeaderboardMode>('all');
+  const [votingUsersLoading, setVotingUsersLoading] = React.useState(false);
+  const [votingUsersError, setVotingUsersError] = React.useState<string | null>(
+    null,
+  );
+  const [votingRosterRequested, setVotingRosterRequested] = React.useState(false);
 
   const todayLocalISO = React.useMemo(() => {
     const now = new Date();
@@ -142,6 +222,91 @@ export function AnnouncementForm({
 
   const handleRemoveImage = React.useCallback((id: Id<'_storage'>) => {
     setImageIds((prev) => prev.filter((imageId) => imageId !== id));
+  }, []);
+
+  const handleToggleVotingGroup = React.useCallback((group: Group, checked: boolean) => {
+    setVotingGroupSelections((prev) => ({ ...prev, [group]: checked }));
+    setVotingPortfolioSelections((prev) => {
+      const updated = { ...prev };
+      getPortfoliosForGroup(group).forEach((portfolio) => {
+        updated[portfolio] = checked;
+      });
+      return updated;
+    });
+  }, []);
+
+  const handleToggleVotingPortfolio = React.useCallback((portfolio: Portfolio, checked: boolean) => {
+    setVotingPortfolioSelections((prev) => ({ ...prev, [portfolio]: checked }));
+    setVotingGroupSelections((prev) => {
+      const next = { ...prev };
+      const owningGroup = GROUP_OPTIONS.find((option) =>
+        option.portfolios.includes(portfolio),
+      )?.value;
+      if (owningGroup) {
+        next[owningGroup] = true;
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleVotingUngrouped = React.useCallback((checked: boolean) => {
+    setVotingAllowUngrouped(checked);
+  }, []);
+
+  const handleToggleVotingSelectAll = React.useCallback((checked: boolean) => {
+    setVotingGroupSelections(initGroupSelections(checked));
+    setVotingPortfolioSelections(initPortfolioSelections(checked));
+    setVotingAllowUngrouped(checked);
+  }, []);
+
+  const handleVotingLeaderboardModeChange = React.useCallback(
+    (value: string) => {
+      if (value === 'group' || value === 'group_portfolio' || value === 'all') {
+        setVotingLeaderboardMode(value);
+      } else {
+        setVotingLeaderboardMode('all');
+      }
+    },
+    [],
+  );
+
+  const fetchVotingParticipants = React.useCallback(async () => {
+    setVotingRosterRequested(true);
+    setVotingUsersLoading(true);
+    setVotingUsersError(null);
+    try {
+      const response = await fetch('/api/admin/users');
+      if (!response.ok) {
+        throw new Error(
+          response.status === 403
+            ? 'You do not have permission to load users.'
+            : 'Failed to load users. Please try again.',
+        );
+      }
+      const data = (await response.json()) as {
+        users?: VotingRosterEntry[];
+      };
+      const roster = Array.isArray(data.users) ? data.users : [];
+      setVotingRoster(
+        roster.map((entry) => ({
+          userId: entry.userId,
+          firstName: entry.firstName,
+          lastName: entry.lastName,
+          group: entry.group ?? null,
+          portfolio: entry.portfolio ?? null,
+          votes: typeof entry.votes === 'number' ? entry.votes : 0,
+        })),
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Failed to load users. Please try again.';
+      setVotingUsersError(message);
+      setVotingRoster([]);
+    } finally {
+      setVotingUsersLoading(false);
+    }
   }, []);
 
   const handlePublishDateChange = React.useCallback(
@@ -310,6 +475,67 @@ export function AnnouncementForm({
       setPollCloseDate('');
       setPollCloseTime('');
     }
+
+    if (activity.eventType === 'voting') {
+      const nextGroupSelections = initGroupSelections(false);
+      const storedGroups = Array.isArray(activity.votingAllowedGroups)
+        ? activity.votingAllowedGroups
+        : null;
+      if (storedGroups && storedGroups.length > 0) {
+        storedGroups.forEach((group) => {
+          if (GROUP_KEYS.includes(group as Group)) {
+            nextGroupSelections[group as Group] = true;
+          }
+        });
+        setVotingGroupSelections({ ...nextGroupSelections });
+      } else {
+        setVotingGroupSelections(initGroupSelections(true));
+      }
+
+      const nextPortfolioSelections = initPortfolioSelections(false);
+      const storedPortfolios = Array.isArray(activity.votingAllowedPortfolios)
+        ? activity.votingAllowedPortfolios
+        : null;
+      if (storedPortfolios && storedPortfolios.length > 0) {
+        storedPortfolios.forEach((portfolio) => {
+          if (PORTFOLIO_KEYS.includes(portfolio as Portfolio)) {
+            nextPortfolioSelections[portfolio as Portfolio] = true;
+          }
+        });
+        setVotingPortfolioSelections({ ...nextPortfolioSelections });
+      } else {
+        setVotingPortfolioSelections(initPortfolioSelections(true));
+      }
+
+      setVotingAllowUngrouped(Boolean(activity.votingAllowUngrouped ?? true));
+      setVotingLeaderboardMode(
+        (activity.votingLeaderboardMode as VotingLeaderboardMode | undefined) &&
+          ['all', 'group', 'group_portfolio'].includes(
+            activity.votingLeaderboardMode as VotingLeaderboardMode,
+          )
+          ? (activity.votingLeaderboardMode as VotingLeaderboardMode)
+          : 'all',
+      );
+      setVotingAddVotePrice(
+        typeof activity.votingAddVotePrice === 'number'
+          ? activity.votingAddVotePrice.toString()
+          : '',
+      );
+      setVotingRemoveVotePrice(
+        typeof activity.votingRemoveVotePrice === 'number'
+          ? activity.votingRemoveVotePrice.toString()
+          : '',
+      );
+      setVotingUsersError(null);
+    } else {
+      setVotingGroupSelections(initGroupSelections(true));
+      setVotingPortfolioSelections(initPortfolioSelections(true));
+      setVotingAllowUngrouped(true);
+      setVotingAddVotePrice('');
+      setVotingRemoveVotePrice('');
+      setVotingUsersError(null);
+      setVotingLeaderboardMode('all');
+    }
   }, [ensureMinimumPollOptions]);
 
   const isEditing = Boolean(existingActivity);
@@ -319,12 +545,60 @@ export function AnnouncementForm({
   const activeType =
     (existingActivity?.eventType as ActivityType | undefined) ?? activityType;
   const isPoll = activeType === 'poll';
+  const isVoting = activeType === 'voting';
   const activityLabel = ACTIVITY_LABELS[activeType];
   const buttonLabel = isEditing
     ? 'Save and Publish'
     : isScheduled
       ? `Schedule ${activityLabel}`
       : `Publish ${activityLabel}`;
+
+  const eligibleVotingParticipants = React.useMemo(() => {
+    if (!isVoting) return [] as VotingParticipant[];
+    return votingRoster
+      .filter((entry) => {
+        if (!entry.group) {
+          return votingAllowUngrouped;
+        }
+        const groupSelection = votingGroupSelections[entry.group];
+        const portfoliosForGroup = getPortfoliosForGroup(entry.group);
+        if (portfoliosForGroup.length === 0) {
+          return Boolean(groupSelection);
+        }
+        if (entry.portfolio) {
+          const portfolioSelection =
+            votingPortfolioSelections[entry.portfolio];
+          if (typeof portfolioSelection === 'boolean') {
+            return portfolioSelection;
+          }
+        }
+        return Boolean(groupSelection);
+      })
+      .map((entry) => ({
+        userId: entry.userId,
+        firstName: entry.firstName,
+        lastName: entry.lastName,
+        group: entry.group,
+        portfolio: entry.portfolio,
+        votes: typeof entry.votes === 'number' ? entry.votes : 0,
+      }));
+  }, [
+    isVoting,
+    votingRoster,
+    votingGroupSelections,
+    votingPortfolioSelections,
+    votingAllowUngrouped,
+  ]);
+
+  const votingAllSelected = React.useMemo(() => {
+    const allGroupsSelected = GROUP_KEYS.every(
+      (group) => votingGroupSelections[group],
+    );
+    const allPortfoliosSelected = PORTFOLIO_KEYS.every(
+      (portfolio) => votingPortfolioSelections[portfolio],
+    );
+    return allGroupsSelected && allPortfoliosSelected && votingAllowUngrouped;
+  }, [votingGroupSelections, votingPortfolioSelections, votingAllowUngrouped]);
 
   React.useEffect(() => {
     setDate((prev) => prev || todayLocalISO);
@@ -353,6 +627,30 @@ export function AnnouncementForm({
       setPollCloseTime('');
     }
   }, [isPoll]);
+
+  React.useEffect(() => {
+    if (!isVoting) {
+      setVotingRoster([]);
+      setVotingGroupSelections(initGroupSelections(true));
+      setVotingPortfolioSelections(initPortfolioSelections(true));
+      setVotingAllowUngrouped(true);
+      setVotingAddVotePrice('');
+      setVotingRemoveVotePrice('');
+      setVotingUsersError(null);
+      setVotingUsersLoading(false);
+      setVotingRosterRequested(false);
+      setVotingLeaderboardMode('all');
+      return;
+    }
+    if (!votingRosterRequested && !votingUsersLoading) {
+      void fetchVotingParticipants();
+    }
+  }, [
+    isVoting,
+    votingUsersLoading,
+    fetchVotingParticipants,
+    votingRosterRequested,
+  ]);
 
   React.useEffect(() => {
     if (!isPoll) return;
@@ -426,6 +724,15 @@ export function AnnouncementForm({
     setPollHasClose(false);
     setPollCloseDate('');
     setPollCloseTime('');
+    setVotingRoster([]);
+    setVotingGroupSelections(initGroupSelections(true));
+    setVotingPortfolioSelections(initPortfolioSelections(true));
+    setVotingAllowUngrouped(true);
+    setVotingAddVotePrice('');
+    setVotingRemoveVotePrice('');
+    setVotingUsersError(null);
+    setVotingRosterRequested(false);
+    setVotingLeaderboardMode('all');
   }, [todayLocalISO]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -514,6 +821,13 @@ export function AnnouncementForm({
     let pollAllowAdditionalOptionsPayload: boolean | undefined;
     let pollMaxSelectionsPayload: number | undefined;
     let pollClosesAtPayload: number | undefined;
+    let votingParticipantsPayload: VotingParticipant[] | undefined;
+    let votingAddVotePricePayload: number | undefined;
+    let votingRemoveVotePricePayload: number | undefined;
+    let votingAllowedGroupsPayload: string[] | undefined;
+    let votingAllowedPortfoliosPayload: string[] | undefined;
+    let votingAllowUngroupedPayload: boolean | undefined;
+    let votingLeaderboardModePayload: VotingLeaderboardMode | undefined;
     if (isPoll) {
       const question = title.trim();
       if (!question) {
@@ -558,6 +872,47 @@ export function AnnouncementForm({
       }
     }
 
+    if (isVoting) {
+      const normalizedParticipants = eligibleVotingParticipants
+        .map((participant) => ({
+          userId: participant.userId,
+          firstName: participant.firstName.trim(),
+          lastName: participant.lastName.trim(),
+          group: participant.group ?? null,
+          portfolio: participant.portfolio ?? null,
+        }))
+        .filter(
+          (participant) =>
+            participant.userId &&
+            (participant.firstName.length > 0 || participant.lastName.length > 0),
+        );
+      if (normalizedParticipants.length === 0) {
+        setError('Voting events need at least one eligible user.');
+        return;
+      }
+      const addPrice = parseFloat(votingAddVotePrice);
+      const removePrice = parseFloat(votingRemoveVotePrice);
+      if (Number.isNaN(addPrice) || addPrice < 0) {
+        setError('Enter a valid price to add a vote.');
+        return;
+      }
+      if (Number.isNaN(removePrice) || removePrice < 0) {
+        setError('Enter a valid price to remove a vote.');
+        return;
+      }
+      votingParticipantsPayload = normalizedParticipants;
+      votingAddVotePricePayload = Math.round(addPrice * 100) / 100;
+      votingRemoveVotePricePayload = Math.round(removePrice * 100) / 100;
+      votingAllowedGroupsPayload = GROUP_KEYS.filter(
+        (group) => votingGroupSelections[group],
+      );
+      votingAllowedPortfoliosPayload = PORTFOLIO_KEYS.filter(
+        (portfolio) => votingPortfolioSelections[portfolio],
+      );
+      votingAllowUngroupedPayload = votingAllowUngrouped;
+      votingLeaderboardModePayload = votingLeaderboardMode;
+    }
+
     setSubmitting(true);
     try {
       if (isEditing && existingActivity) {
@@ -574,6 +929,13 @@ export function AnnouncementForm({
           pollAllowAdditionalOptions: pollAllowAdditionalOptionsPayload,
           pollMaxSelections: pollMaxSelectionsPayload,
           pollClosesAt: pollClosesAtPayload ?? null,
+          votingParticipants: votingParticipantsPayload,
+          votingAddVotePrice: votingAddVotePricePayload,
+          votingRemoveVotePrice: votingRemoveVotePricePayload,
+          votingAllowedGroups: votingAllowedGroupsPayload,
+          votingAllowedPortfolios: votingAllowedPortfoliosPayload,
+          votingAllowUngrouped: votingAllowUngroupedPayload,
+          votingLeaderboardMode: votingLeaderboardModePayload,
           eventType: activeType,
           imageIds,
         });
@@ -595,6 +957,13 @@ export function AnnouncementForm({
           pollAllowAdditionalOptions: pollAllowAdditionalOptionsPayload,
           pollMaxSelections: pollMaxSelectionsPayload,
           pollClosesAt: pollClosesAtPayload ?? null,
+          votingParticipants: votingParticipantsPayload,
+          votingAddVotePrice: votingAddVotePricePayload,
+          votingRemoveVotePrice: votingRemoveVotePricePayload,
+          votingAllowedGroups: votingAllowedGroupsPayload,
+          votingAllowedPortfolios: votingAllowedPortfoliosPayload,
+          votingAllowUngrouped: votingAllowUngroupedPayload,
+          votingLeaderboardMode: votingLeaderboardModePayload,
           eventType: activeType,
           imageIds,
         });
@@ -965,14 +1334,18 @@ export function AnnouncementForm({
       aria-label={`${isEditing ? 'Edit' : 'Create'} ${activityLabel.toLowerCase()} form`}
       onSubmit={onSubmit}
     >
-      <div className={`grid gap-4 ${showSchedulingControls ? 'sm:grid-cols-2' : ''}`}>
+      <div
+        className={`grid gap-4 ${showSchedulingControls ? 'sm:grid-cols-2' : ''}`}
+      >
         <label className='flex flex-col gap-2 text-sm text-foreground'>
           Title
           <input
             type='text'
             name='title'
             placeholder={
-              isPoll ? 'Poll question (max 100 characters)' : 'Announcement Title...'
+              isPoll
+                ? 'Poll question (max 100 characters)'
+                : 'Announcement Title...'
             }
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -1007,6 +1380,27 @@ export function AnnouncementForm({
         />
       </label>
 
+      <VotingSettingsSection
+        isVoting={isVoting}
+        addVotePrice={votingAddVotePrice}
+        removeVotePrice={votingRemoveVotePrice}
+        onChangeAddPrice={setVotingAddVotePrice}
+        onChangeRemovePrice={setVotingRemoveVotePrice}
+        groupSelections={votingGroupSelections}
+        portfolioSelections={votingPortfolioSelections}
+        allowUngrouped={votingAllowUngrouped}
+        leaderboardMode={votingLeaderboardMode}
+        leaderboardOptions={LEADERBOARD_OPTIONS}
+        onToggleGroup={handleToggleVotingGroup}
+        onTogglePortfolio={handleToggleVotingPortfolio}
+        onToggleUngrouped={handleToggleVotingUngrouped}
+        onToggleSelectAll={handleToggleVotingSelectAll}
+        onChangeLeaderboardMode={handleVotingLeaderboardModeChange}
+        allSelected={votingAllSelected}
+        loading={votingUsersLoading}
+        error={votingUsersError}
+      />
+
       <ImageUploadSection
         imageIds={imageIds}
         canAddMore={canAddMoreImages}
@@ -1030,7 +1424,9 @@ export function AnnouncementForm({
         pollAnonymous={pollAnonymous}
         pollAllowAdditionalOptions={pollAllowAdditionalOptions}
         pollMaxSelections={pollMaxSelections}
-        pollOptionsCount={pollOptions.filter((option) => option.trim().length > 0).length}
+        pollOptionsCount={
+          pollOptions.filter((option) => option.trim().length > 0).length
+        }
         pollHasClose={pollHasClose}
         pollCloseDate={pollCloseDate}
         pollCloseTime={pollCloseTime}
@@ -1069,9 +1465,7 @@ export function AnnouncementForm({
       />
 
       <div className='flex items-center justify-between gap-3'>
-        <p className='text-xs text-muted-foreground'>
-          {publishStatusMessage}
-        </p>
+        <p className='text-xs text-muted-foreground'>{publishStatusMessage}</p>
         <div className='flex gap-2'>
           <button
             type='button'
